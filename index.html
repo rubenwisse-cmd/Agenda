@@ -107,11 +107,13 @@
     </div>
     <div id="events"><div class="empty">Nog niets gevonden.</div></div>
     <div class="row" style="margin-top:12px">
-      <button class="primary" id="ics" disabled>In agenda zetten (.ics)</button>
+      <button class="primary" id="ics" disabled>📅 In agenda zetten</button>
+      <button id="share" disabled>Bestand delen / bewaren</button>
     </div>
     <p class="src" style="margin-top:10px">
-      Tip: op iPhone/Mac opent het .ics-bestand direct in Agenda ("Voeg alles toe"). Op Android/Outlook: open het gedownloade bestand,
-      of gebruik per afspraak de link "Google Agenda".
+      <b>iPhone:</b> tik op "In agenda zetten" en daarna op "Voeg alles toe". Gebeurt er niets? Tik op "Bestand delen / bewaren",
+      kies "Bewaar in Bestanden", open het bestand in de app Bestanden en tik op "Voeg alles toe".<br>
+      <b>Android/Google:</b> gebruik per afspraak de link "Google Agenda".
     </p>
   </div>
 
@@ -375,7 +377,7 @@
 
   function render() {
     const box = $('events');
-    $('ics').disabled = !events.some(e => e.on);
+    $('ics').disabled = $('share').disabled = !events.some(e => e.on);
     if (!events.length) { box.innerHTML = '<div class="empty">Nog niets gevonden.</div>'; return; }
     box.innerHTML = events.map((e, i) => `
       <div class="ev ${e.on ? '' : 'off'}" data-i="${i}">
@@ -466,22 +468,40 @@
     return lines.map(fold).join('\r\n') + '\r\n';
   }
 
-  $('ics').addEventListener('click', async () => {
-    const list = events.filter(e => e.on);
-    if (!list.length) return;
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const selected = () => events.filter(e => e.on);
+  const done = (n, how) => setStatus(`${n} ${n === 1 ? 'afspraak' : 'afspraken'} ${how}`);
+
+  // Hoofdknop: op iPhone direct het Agenda-scherm "Voeg alles toe" openen
+  $('ics').addEventListener('click', () => {
+    const list = selected(); if (!list.length) return;
     const ics = buildIcs(list);
-    const name = 'afspraken.ics';
-    const file = new File([ics], name, { type: 'text/calendar' });
-    // Op telefoons: deelmenu gebruiken als dat kan (direct naar Agenda-app)
-    if (navigator.canShare && navigator.canShare({ files: [file] }) && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
-      try { await navigator.share({ files: [file], title: 'Afspraken' }); return; } catch (err) { if (err.name === 'AbortError') return; }
+    if (isIOS) {
+      location.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+      done(list.length, 'klaargezet. Tik in het scherm dat opent op "Voeg alles toe".');
+    } else {
+      downloadFile(ics);
+      done(list.length, 'opgeslagen in afspraken.ics. Open het bestand om ze aan je agenda toe te voegen.');
     }
+  });
+
+  // Tweede knop: bestand delen of bewaren
+  $('share').addEventListener('click', async () => {
+    const list = selected(); if (!list.length) return;
+    const ics = buildIcs(list);
+    const file = new File([ics], 'afspraken.ics', { type: 'text/calendar' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; } catch (err) { if (err.name === 'AbortError') return; }
+    }
+    downloadFile(ics);
+  });
+
+  function downloadFile(ics) {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(file); a.download = name;
+    a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' })); a.download = 'afspraken.ics';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    setStatus(`${list.length} ${list.length === 1 ? 'afspraak' : 'afspraken'} opgeslagen in ${name}. Open het bestand om ze aan je agenda toe te voegen.`);
-  });
+  }
 
   renderNames();
 
