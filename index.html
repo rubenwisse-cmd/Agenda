@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Screenshot naar Agenda</title>
+<meta name="theme-color" content="#2563eb">
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1a1d23; --muted: #6b7280;
+    --border: #e2e5ea; --accent: #2563eb; --accent-text: #ffffff; --danger: #dc2626;
+    --drop: #eef3ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111317; --card: #1b1e24; --text: #e8eaee; --muted: #9aa1ad;
+      --border: #2c313a; --accent: #3b82f6; --accent-text: #ffffff; --danger: #f87171;
+      --drop: #1a2335;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  #drop {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    border: 2px dashed var(--border); border-radius: 14px; padding: 32px 16px; text-align: center;
+    cursor: pointer; background: var(--card); transition: background .15s, border-color .15s;
+  }
+  #drop.over { background: var(--drop); border-color: var(--accent); }
+  #drop strong { font-size: 1.1rem; }
+  #drop span { color: var(--muted); font-size: .9rem; }
+  #preview { max-width: 100%; max-height: 320px; border-radius: 10px; display: none; margin: 0 auto 12px; }
+  button, .btn {
+    font: inherit; border: 1px solid var(--border); background: var(--card); color: var(--text);
+    padding: 9px 14px; border-radius: 10px; cursor: pointer; text-decoration: none; display: inline-block;
+  }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  progress { width: 100%; height: 8px; }
+  #status { color: var(--muted); font-size: .9rem; margin-top: 8px; min-height: 1.4em; }
+  .ev { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .ev.off { opacity: .45; }
+  .ev .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .ev label { font-size: .8rem; color: var(--muted); display: block; }
+  input[type=text], input[type=date], input[type=time], textarea {
+    width: 100%; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; min-width: 0;
+  }
+  .ev .top { display: flex; gap: 8px; align-items: center; }
+  .ev .top input[type=text] { flex: 1; font-weight: 600; }
+  .ev .foot { display: flex; gap: 12px; align-items: center; margin-top: 8px; flex-wrap: wrap; font-size: .9rem; }
+  .ev .foot a { color: var(--accent); }
+  .ev .del { color: var(--danger); border: none; background: none; padding: 4px 8px; }
+  .src { font-size: .8rem; color: var(--muted); margin-top: 6px; word-break: break-word; }
+  details summary { cursor: pointer; color: var(--muted); }
+  textarea { min-height: 140px; font-family: ui-monospace, monospace; font-size: .85rem; }
+  .empty { color: var(--muted); text-align: center; padding: 12px; }
+  @media (max-width: 520px) { .ev .grid { grid-template-columns: 1fr 1fr; } .ev .grid .d { grid-column: 1 / -1; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>📅 Screenshot naar Agenda</h1>
+  <p class="sub">Zet een screenshot met datums neer. De app leest de tekst, vindt de datums en tijden, en zet ze in je agenda.</p>
+
+  <div class="card">
+    <img id="preview" alt="Screenshot">
+    <label id="drop" for="file">
+      <strong>Sleep een screenshot hierheen</strong>
+      <span>of tik om te kiezen · plakken (Ctrl/⌘+V) werkt ook</span>
+    </label>
+    <input id="file" type="file" accept="image/*" hidden>
+    <div id="progressWrap" style="display:none;margin-top:12px"><progress id="progress" max="1" value="0"></progress></div>
+    <div id="status"></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <strong>Gevonden afspraken</strong>
+      <button id="add">+ Handmatig toevoegen</button>
+    </div>
+    <div id="events"><div class="empty">Nog niets gevonden.</div></div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="ics" disabled>In agenda zetten (.ics)</button>
+    </div>
+    <p class="src" style="margin-top:10px">
+      Tip: op iPhone/Mac opent het .ics-bestand direct in Agenda ("Voeg alles toe"). Op Android/Outlook: open het gedownloade bestand,
+      of gebruik per afspraak de link "Google Agenda".
+    </p>
+  </div>
+
+  <details class="card">
+    <summary>Herkende tekst (aanpassen &amp; opnieuw zoeken)</summary>
+    <textarea id="raw" placeholder="Hier verschijnt de tekst uit de screenshot. Je kunt ook zelf tekst plakken."></textarea>
+    <div class="row" style="margin-top:8px"><button id="reparse">Opnieuw datums zoeken</button></div>
+  </details>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let events = [];
+
+  // ---------- Afbeelding inlezen ----------
+  const drop = $('drop');
+  $('file').addEventListener('change', (e) => e.target.files[0] && handleImage(e.target.files[0]));
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => {
+    const f = [...e.dataTransfer.files].find(f => f.type.startsWith('image/'));
+    if (f) handleImage(f);
+  });
+  document.addEventListener('paste', e => {
+    const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+    if (item) { e.preventDefault(); handleImage(item.getAsFile()); }
+  });
+
+  async function handleImage(file) {
+    const url = URL.createObjectURL(file);
+    const img = $('preview'); img.src = url; img.style.display = 'block';
+    $('progressWrap').style.display = 'block';
+    setStatus('Tekst herkennen…');
+    try {
+      const { data } = await Tesseract.recognize(file, 'nld+eng', {
+        logger: m => {
+          if (m.status === 'recognizing text') { $('progress').value = m.progress; setStatus(`Tekst herkennen… ${Math.round(m.progress * 100)}%`); }
+          else if (m.status) setStatus(statusNL(m.status));
+        }
+      });
+      $('raw').value = data.text;
+      runParse(true);
+    } catch (err) {
+      console.error(err);
+      setStatus('Er ging iets mis bij het lezen van de afbeelding: ' + err.message);
+    } finally {
+      $('progressWrap').style.display = 'none';
+    }
+  }
+  function statusNL(s) {
+    if (s.includes('loading')) return 'Tekstherkenning laden (eerste keer kan even duren)…';
+    if (s.includes('initializ')) return 'Voorbereiden…';
+    return s;
+  }
+  function setStatus(t) { $('status').textContent = t; }
+
+  // ---------- Datums & tijden herkennen ----------
+  const MONTHS = {
+    jan: 1, januari: 1, january: 1,
+    feb: 2, februari: 2, february: 2,
+    mrt: 3, maa: 3, maart: 3, mar: 3, march: 3,
+    apr: 4, april: 4,
+    mei: 5, may: 5,
+    jun: 6, juni: 6, june: 6,
+    jul: 7, juli: 7, july: 7,
+    aug: 8, augustus: 8, august: 8,
+    sep: 9, sept: 9, september: 9,
+    okt: 10, oct: 10, oktober: 10, october: 10,
+    nov: 11, november: 11,
+    dec: 12, december: 12
+  };
+  const MONTH_RE = '(januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|january|february|march|may|june|july|august|october|jan|feb|mrt|maa|mar|apr|jun|jul|aug|sept|sep|okt|oct|nov|dec)';
+  const DAY_RE = '(?:(?:maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|monday|tuesday|wednesday|thursday|friday|saturday|sunday|ma|di|wo|do|vr|za|zo|mon|tue|wed|thu|fri|sat|sun)\\.?,?\\s+)?';
+
+  const DATE_PATTERNS = [
+    // 2026-11-17
+    { re: /\b(\d{4})-(\d{1,2})-(\d{1,2})\b/g, f: m => [+m[1], +m[2], +m[3]] },
+    // 17-11-2026, 17/11/26, 17.11.2026
+    { re: /\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\b/g, f: m => [fixYear(+m[3]), +m[2], +m[1]] },
+    // 17 november 2026, ma 17 nov, 17e nov.
+    { re: new RegExp('\\b' + DAY_RE + '(\\d{1,2})(?:e|ste|de|st|nd|rd|th)?\\s*' + MONTH_RE + '\\.?(?:,?\\s+(\\d{4}))?\\b', 'gi'),
+      f: m => [m[3] ? +m[3] : null, MONTHS[m[2].toLowerCase()], +m[1]] },
+    // November 17, 2026
+    { re: new RegExp('\\b' + DAY_RE + MONTH_RE + '\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?\\b', 'gi'),
+      f: m => [m[3] ? +m[3] : null, MONTHS[m[1].toLowerCase()], +m[2]] },
+    // 17-11, 17/11 (zonder jaar)
+    { re: /\b(\d{1,2})[-/](\d{1,2})\b(?![-/.:]\d)/g, f: m => [null, +m[2], +m[1]] },
+  ];
+
+  const TIME = '(\\d{1,2})(?:[:.](\\d{2}))?\\s*(am|pm|u(?:ur)?)?';
+  const RANGE_RE = new RegExp('\\b' + TIME + '\\s*(?:-|–|—|tot|t/m|to|until)\\s*' + TIME + '\\b', 'gi');
+  const SINGLE_RE = /\b(\d{1,2})[:.](\d{2})\s*(am|pm)?\b|\b(\d{1,2})\s*(am|pm|uur|u)\b/gi;
+
+  function fixYear(y) { return y < 100 ? 2000 + y : y; }
+
+  function toTime(h, min, suf) {
+    h = +h; min = min ? +min : 0;
+    suf = (suf || '').toLowerCase();
+    if (suf === 'pm' && h < 12) h += 12;
+    if (suf === 'am' && h === 12) h = 0;
+    if (h > 23 || min > 59) return null;
+    return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+  }
+
+  function findDates(line) {
+    const found = [];
+    let masked = line;
+    for (const p of DATE_PATTERNS) {
+      p.re.lastIndex = 0;
+      let m;
+      while ((m = p.re.exec(masked))) {
+        const [y, mo, d] = p.f(m);
+        if (!mo || mo < 1 || mo > 12 || d < 1 || d > 31) continue;
+        found.push({ index: m.index, y, mo, d, text: m[0] });
+        masked = masked.slice(0, m.index) + ' '.repeat(m[0].length) + masked.slice(m.index + m[0].length);
+      }
+    }
+    return { found: found.sort((a, b) => a.index - b.index), masked };
+  }
+
+  function findTimes(text) {
+    const res = [];
+    let masked = text;
+    RANGE_RE.lastIndex = 0;
+    let m;
+    while ((m = RANGE_RE.exec(text))) {
+      // Een bereik telt alleen als er minstens één ':'/'.'-tijd of een 'u/uur/am/pm' in zit
+      if (!m[2] && !m[5] && !m[3] && !m[6]) continue;
+      const s = toTime(m[1], m[2], m[3] || m[6]), e = toTime(m[4], m[5], m[6]);
+      if (s && e) {
+        res.push({ index: m.index, start: s, end: e, text: m[0] });
+        masked = masked.slice(0, m.index) + ' '.repeat(m[0].length) + masked.slice(m.index + m[0].length);
+      }
+    }
+    SINGLE_RE.lastIndex = 0;
+    while ((m = SINGLE_RE.exec(masked))) {
+      const t = m[1] ? toTime(m[1], m[2], m[3]) : toTime(m[4], null, m[5]);
+      if (t) res.push({ index: m.index, start: t, end: null, text: m[0] });
+    }
+    return res.sort((a, b) => a.index - b.index);
+  }
+
+  function resolveYear(mo, d) {
+    const now = new Date();
+    let y = now.getFullYear();
+    const cand = new Date(y, mo - 1, d);
+    // Als de datum meer dan 2 maanden geleden is, waarschijnlijk volgend jaar
+    if ((now - cand) / 86400000 > 60) y++;
+    return y;
+  }
+
+  function cleanTitle(s) {
+    return s
+      .replace(/\b(van|om|tot|t\/m|from|at|op|on)\b\s*$/i, '')
+      .replace(/^[\s\-–—|:,•·*>]+|[\s\-–—|:,•·*]+$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  function parseText(text) {
+    const lines = text.split(/\r?\n/).map(l => l.trim());
+    const out = [];
+    lines.forEach((line, i) => {
+      if (!line) return;
+      const { found, masked } = findDates(line);
+      found.forEach((dt, k) => {
+        // Tekst die bij deze datum hoort: tot aan de volgende datum op dezelfde regel
+        const segEnd = k + 1 < found.length ? found[k + 1].index : line.length;
+        const segStart = k === 0 ? 0 : found[k - 1].index + found[k - 1].text.length;
+        let seg = masked.slice(segStart, segEnd);
+        let times = findTimes(seg);
+        // Geen tijd op deze regel? Kijk op de volgende regel (als daar geen datum staat)
+        let nextUsed = false;
+        const next = lines[i + 1] || '';
+        if (!times.length && next && !findDates(next).found.length) {
+          times = findTimes(next);
+          if (times.length) nextUsed = true;
+        }
+        for (const t of times) seg = seg.replace(t.text, ' ');
+        let title = cleanTitle(seg);
+        if (title.length < 2) {
+          // Titel van de volgende of vorige regel halen
+          const cand = [next, lines[i - 1] || ''].find(l => l && !findDates(l).found.length);
+          if (cand) {
+            let c = cand; for (const t of findTimes(c)) c = c.replace(t.text, ' ');
+            title = cleanTitle(c);
+          }
+        }
+        const y = dt.y || resolveYear(dt.mo, dt.d);
+        const date = `${y}-${String(dt.mo).padStart(2, '0')}-${String(dt.d).padStart(2, '0')}`;
+        const t = times[0];
+        let start = t ? t.start : '', end = t ? (t.end || '') : '';
+        if (start && !end) end = addHour(start);
+        out.push({ on: true, title: title || 'Afspraak', date, start, end, allDay: !start,
+                   src: line + (nextUsed ? ' / ' + next : '') });
+      });
+    });
+    // Dubbele weghalen
+    const seen = new Set();
+    return out.filter(e => { const k = e.date + e.start + e.title; if (seen.has(k)) return false; seen.add(k); return true; });
+  }
+
+  function addHour(t) {
+    const [h, m] = t.split(':').map(Number);
+    return String(Math.min(h + 1, 23)).padStart(2, '0') + ':' + String(h + 1 > 23 ? 59 : m).padStart(2, '0');
+  }
+
+  function runParse(fromOcr) {
+    events = parseText($('raw').value);
+    render();
+    if (events.length) setStatus(`${events.length} ${events.length === 1 ? 'afspraak' : 'afspraken'} gevonden. Controleer ze en tik op "In agenda zetten".`);
+    else setStatus(fromOcr ? 'Geen datums gevonden. Bekijk de herkende tekst hieronder of voeg handmatig toe.' : 'Geen datums gevonden.');
+  }
+  $('reparse').addEventListener('click', () => runParse(false));
+
+  // ---------- Lijst tonen ----------
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  function render() {
+    const box = $('events');
+    $('ics').disabled = !events.some(e => e.on);
+    if (!events.length) { box.innerHTML = '<div class="empty">Nog niets gevonden.</div>'; return; }
+    box.innerHTML = events.map((e, i) => `
+      <div class="ev ${e.on ? '' : 'off'}" data-i="${i}">
+        <div class="top">
+          <input type="checkbox" data-k="on" ${e.on ? 'checked' : ''} aria-label="Meenemen">
+          <input type="text" data-k="title" value="${esc(e.title)}" aria-label="Titel">
+          <button class="del" data-del title="Verwijderen">✕</button>
+        </div>
+        <div class="grid">
+          <div class="d"><label>Datum</label><input type="date" data-k="date" value="${e.date}"></div>
+          <div><label>Begin</label><input type="time" data-k="start" value="${e.start}" ${e.allDay ? 'disabled' : ''}></div>
+          <div><label>Eind</label><input type="time" data-k="end" value="${e.end}" ${e.allDay ? 'disabled' : ''}></div>
+        </div>
+        <div class="foot">
+          <label style="display:flex;gap:6px;align-items:center;color:inherit;font-size:inherit">
+            <input type="checkbox" data-k="allDay" ${e.allDay ? 'checked' : ''}> Hele dag</label>
+          <a href="${googleLink(e)}" target="_blank" rel="noopener">Google Agenda ↗</a>
+        </div>
+        ${e.src ? `<div class="src">Uit: “${esc(e.src)}”</div>` : ''}
+      </div>`).join('');
+  }
+
+  $('events').addEventListener('input', onEdit);
+  $('events').addEventListener('change', onEdit);
+  $('events').addEventListener('click', e => {
+    if (!e.target.closest('[data-del]')) return;
+    events.splice(+e.target.closest('.ev').dataset.i, 1); render();
+  });
+  function onEdit(e) {
+    const k = e.target.dataset.k; if (!k) return;
+    const ev = events[+e.target.closest('.ev').dataset.i];
+    ev[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (k === 'allDay' && !ev.allDay && !ev.start) { ev.start = '09:00'; ev.end = '10:00'; }
+    if (k === 'start' && ev.start && (!ev.end || ev.end <= ev.start)) ev.end = addHour(ev.start);
+    if (e.type === 'change' || e.target.type === 'checkbox') render();
+    else { const a = e.target.closest('.ev').querySelector('.foot a'); a.href = googleLink(ev); }
+  }
+
+  $('add').addEventListener('click', () => {
+    const d = new Date();
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    events.push({ on: true, title: 'Nieuwe afspraak', date, start: '09:00', end: '10:00', allDay: false, src: '' });
+    render();
+  });
+
+  // ---------- Exporteren ----------
+  const compact = (date, time) => date.replace(/-/g, '') + (time ? 'T' + time.replace(':', '') + '00' : '');
+  function nextDay(date) {
+    const d = new Date(date + 'T12:00:00'); d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  function endDate(e) { return e.end && e.end <= e.start ? nextDay(e.date) : e.date; }
+
+  function googleLink(e) {
+    const dates = e.allDay || !e.start
+      ? compact(e.date) + '/' + compact(nextDay(e.date))
+      : compact(e.date, e.start) + '/' + compact(endDate(e), e.end || addHour(e.start));
+    return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(e.title) +
+      '&dates=' + dates + (e.src ? '&details=' + encodeURIComponent('Uit screenshot: ' + e.src) : '');
+  }
+
+  function icsEscape(s) { return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
+  function fold(line) {
+    const out = []; while (line.length > 74) { out.push(line.slice(0, 74)); line = ' ' + line.slice(74); }
+    out.push(line); return out.join('\r\n');
+  }
+
+  function buildIcs(list) {
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Screenshot naar Agenda//NL', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+    list.forEach((e, i) => {
+      lines.push('BEGIN:VEVENT',
+        'UID:' + stamp + '-' + i + '-' + Math.random().toString(36).slice(2) + '@screenshot-agenda',
+        'DTSTAMP:' + stamp);
+      if (e.allDay || !e.start) {
+        lines.push('DTSTART;VALUE=DATE:' + compact(e.date), 'DTEND;VALUE=DATE:' + compact(nextDay(e.date)));
+      } else {
+        lines.push('DTSTART:' + compact(e.date, e.start), 'DTEND:' + compact(endDate(e), e.end || addHour(e.start)));
+      }
+      lines.push('SUMMARY:' + icsEscape(e.title));
+      if (e.src) lines.push('DESCRIPTION:' + icsEscape('Uit screenshot: ' + e.src));
+      lines.push('END:VEVENT');
+    });
+    lines.push('END:VCALENDAR');
+    return lines.map(fold).join('\r\n') + '\r\n';
+  }
+
+  $('ics').addEventListener('click', async () => {
+    const list = events.filter(e => e.on);
+    if (!list.length) return;
+    const ics = buildIcs(list);
+    const name = 'afspraken.ics';
+    const file = new File([ics], name, { type: 'text/calendar' });
+    // Op telefoons: deelmenu gebruiken als dat kan (direct naar Agenda-app)
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
+      try { await navigator.share({ files: [file], title: 'Afspraken' }); return; } catch (err) { if (err.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    setStatus(`${list.length} ${list.length === 1 ? 'afspraak' : 'afspraken'} opgeslagen in ${name}. Open het bestand om ze aan je agenda toe te voegen.`);
+  });
+
+  // Voor testen
+  window.__parseText = parseText;
+  window.__buildIcs = buildIcs;
+})();
+</script>
+</body>
+</html>
