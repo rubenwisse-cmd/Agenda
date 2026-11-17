@@ -308,8 +308,21 @@
     return y;
   }
 
+  // Klasse/divisie/poule weghalen, bijv. "3e klasse", "Hoofdklasse B", "Klasse 4E", "(2e kl.)", "Poule A"
+  const ORD = '(?:\\d+\\s*(?:e|ste|de)?|eerste|tweede|derde|vierde|vijfde|zesde|zevende|achtste)';
+  const CLASS_RES = [
+    new RegExp('\\b(?:' + ORD + '\\s*|hoofd|top|overgangs|promotie|reserve\\s*)?(?:klasse|kl\\.|divisie)(?:\\s+(?:[A-Z]{1,2}\\d?|\\d{1,2}[A-Z]?)\\b)?', 'gi'),
+    new RegExp('\\b' + ORD + '\\s*(?:klasse|kl\\.?|divisie)\\b', 'gi'),
+    /\bklasse\s*[A-Z0-9]{1,3}\b/gi,
+    /\bpoule\s*[A-Z0-9]{1,2}\b/gi
+  ];
+  function stripClass(s) {
+    for (const re of CLASS_RES) s = s.replace(re, ' ');
+    return s.replace(/\(\s*\)|\[\s*\]/g, ' ').replace(/\s*[-–|,]\s*([-–|,]\s*)+/g, ' - ');
+  }
+
   function cleanTitle(s) {
-    return s
+    return stripClass(s)
       .replace(/\b(van|om|tot|t\/m|from|at|op|on)\b\s*$/i, '')
       .replace(/^[\s\-–—|:,•·*>]+|[\s\-–—|:,•·*]+$/g, '')
       .replace(/\s{2,}/g, ' ')
