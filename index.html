@@ -71,6 +71,8 @@
   .hint { font-size: .85rem; color: var(--muted); margin: 0; }
   .ev .loc { margin-top: 8px; }
   .help { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--drop); border: 1px solid var(--accent); }
+  .steps { padding-left: 20px; margin: 8px 0; } .steps li { margin-bottom: 10px; } .steps ul { padding-left: 18px; margin: 4px 0; }
+  code { background: var(--bg); padding: 1px 6px; border-radius: 4px; }
   .help ol { margin: 6px 0; padding-left: 20px; }
   @media (max-width: 520px) { .ev .grid { grid-template-columns: 1fr 1fr; } .ev .grid .d { grid-column: 1 / -1; } }
 </style>
@@ -109,10 +111,11 @@
     </div>
     <div id="events"><div class="empty">Nog niets gevonden.</div></div>
     <div class="row" style="margin-top:12px">
-      <button class="primary" id="ics" disabled>📅 In agenda zetten</button>
+      <button class="primary" id="sc" disabled>⚡ In agenda zetten</button>
+      <button id="ics" disabled>Via bestand (.ics)</button>
     </div>
     <div id="help" class="help" hidden>
-      <strong>Zo komen ze in je agenda (iPhone):</strong>
+      <strong>Via bestand (iPhone):</strong>
       <ol>
         <li>Kies in het menu dat opent <b>"Bewaar in Bestanden"</b> en tik op <b>Bewaar</b>.</li>
         <li>Open de app <b>Bestanden</b> en tik op <b>afspraken.ics</b>.</li>
@@ -121,6 +124,31 @@
       <p class="hint">Android/Google: tik bij een afspraak op "Google Agenda ↗".</p>
     </div>
   </div>
+
+  <details class="card" id="scGuide">
+    <summary><b>⚡ Eenmalig instellen: opdracht in de app Opdrachten</b></summary>
+    <p class="hint" style="margin-top:8px">Hiermee zet de knop "⚡ In agenda zetten" je afspraken met één tik in je agenda. Je hoeft dit maar één keer te doen.</p>
+    <ol class="steps">
+      <li>Open de app <b>Opdrachten</b> en tik rechtsboven op <b>+</b>.</li>
+      <li>Tik bovenaan op de naam en noem de opdracht precies: <b>Agenda Toevoegen</b></li>
+      <li>Tik op <b>Zoek naar apps en acties</b>, zoek <b>"woordenboek"</b> en kies <b>Haal woordenboek op uit invoer</b>.<br>
+          Tik op het blauwe woord <b>Invoer</b> in die actie en kies <b>Opdrachtinvoer</b>.</li>
+      <li>Zoek <b>"herhaal"</b> en kies <b>Herhaal met elk</b>. Er moet staan: <i>Herhaal met elk onderdeel in Woordenboek</i>.</li>
+      <li>Zoek <b>"activiteit"</b> en kies <b>Voeg nieuwe activiteit toe</b>. Sleep die actie <b>tussen</b> "Herhaal met elk" en "Einde herhaling" (als hij daar nog niet staat).</li>
+      <li>In die actie vul je 4 velden in. Steeds hetzelfde trucje:<br>
+          tik op het veld → kies boven het toetsenbord <b>Herhaalonderdeel</b> → tik op het blauwe <b>Herhaalonderdeel</b> dat verschijnt → kies bij Type <b>Woordenboek</b> → vul bij <b>Sleutel</b> het woord in:
+        <ul>
+          <li><b>Titel</b> → sleutel <code>titel</code></li>
+          <li><b>Begindatum</b> (tik op de datum) → sleutel <code>start</code></li>
+          <li><b>Einddatum</b> → sleutel <code>eind</code></li>
+          <li>Tik op <b>Toon meer</b>, dan <b>Locatie</b> → sleutel <code>locatie</code></li>
+        </ul>
+        Kies bij <b>Agenda</b> in welke agenda ze moeten komen.</li>
+      <li>Tik op <b>Gereed</b>. Klaar!</li>
+    </ol>
+    <p class="hint">De eerste keer vraagt je iPhone of de opdracht je agenda mag gebruiken: kies <b>Sta toe</b>.
+    Afspraken van een hele dag komen erin van 00:00 tot 23:59.</p>
+  </details>
 
   <details class="card">
     <summary>Herkende tekst (aanpassen &amp; opnieuw zoeken)</summary>
@@ -395,7 +423,7 @@
 
   function render() {
     const box = $('events');
-    $('ics').disabled = !events.some(e => e.on);
+    $('ics').disabled = $('sc').disabled = !events.some(e => e.on);
     if (!events.length) { box.innerHTML = '<div class="empty">Nog niets gevonden.</div>'; return; }
     box.innerHTML = events.map((e, i) => `
       <div class="ev ${e.on ? '' : 'off'}" data-i="${i}">
@@ -488,6 +516,23 @@
 
   const selected = () => events.filter(e => e.on);
   const done = (n, how) => setStatus(`${n} ${n === 1 ? 'afspraak' : 'afspraken'} ${how}`);
+
+  const SHORTCUT = 'Agenda Toevoegen';
+  $('sc').addEventListener('click', () => {
+    const list = selected(); if (!list.length) return;
+    const data = list.map(e => {
+      const allDay = e.allDay || !e.start;
+      return {
+        titel: e.title || 'Afspraak',
+        locatie: e.location || '',
+        start: e.date + ' ' + (allDay ? '00:00' : e.start),
+        eind: allDay ? e.date + ' 23:59' : endDate(e) + ' ' + (e.end || addHour(e.start))
+      };
+    });
+    location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(SHORTCUT) +
+      '&input=text&text=' + encodeURIComponent(JSON.stringify(data));
+    done(list.length, 'naar Opdrachten gestuurd. Werkt dit niet? Stel eerst de opdracht in (zie "Eenmalig instellen" hieronder).');
+  });
 
   // Eén knop: deelmenu (iPhone/Android), anders downloaden. Daarna uitleg tonen.
   $('ics').addEventListener('click', async () => {
