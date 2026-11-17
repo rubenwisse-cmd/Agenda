@@ -70,6 +70,8 @@
   .chip .x { padding: 6px 10px 6px 4px; color: var(--muted); }
   .hint { font-size: .85rem; color: var(--muted); margin: 0; }
   .ev .loc { margin-top: 8px; }
+  .help { margin-top: 12px; padding: 12px 14px; border-radius: 10px; background: var(--drop); border: 1px solid var(--accent); }
+  .help ol { margin: 6px 0; padding-left: 20px; }
   @media (max-width: 520px) { .ev .grid { grid-template-columns: 1fr 1fr; } .ev .grid .d { grid-column: 1 / -1; } }
 </style>
 </head>
@@ -108,13 +110,16 @@
     <div id="events"><div class="empty">Nog niets gevonden.</div></div>
     <div class="row" style="margin-top:12px">
       <button class="primary" id="ics" disabled>📅 In agenda zetten</button>
-      <button id="share" disabled>Bestand delen / bewaren</button>
     </div>
-    <p class="src" style="margin-top:10px">
-      <b>iPhone:</b> tik op "In agenda zetten" en daarna op "Voeg alles toe". Gebeurt er niets? Tik op "Bestand delen / bewaren",
-      kies "Bewaar in Bestanden", open het bestand in de app Bestanden en tik op "Voeg alles toe".<br>
-      <b>Android/Google:</b> gebruik per afspraak de link "Google Agenda".
-    </p>
+    <div id="help" class="help" hidden>
+      <strong>Zo komen ze in je agenda (iPhone):</strong>
+      <ol>
+        <li>Kies in het menu dat opent <b>"Bewaar in Bestanden"</b> en tik op <b>Bewaar</b>.</li>
+        <li>Open de app <b>Bestanden</b> en tik op <b>afspraken.ics</b>.</li>
+        <li>Tik op <b>"Voeg alles toe"</b>. Klaar!</li>
+      </ol>
+      <p class="hint">Android/Google: tik bij een afspraak op "Google Agenda ↗".</p>
+    </div>
   </div>
 
   <details class="card">
@@ -390,7 +395,7 @@
 
   function render() {
     const box = $('events');
-    $('ics').disabled = $('share').disabled = !events.some(e => e.on);
+    $('ics').disabled = !events.some(e => e.on);
     if (!events.length) { box.innerHTML = '<div class="empty">Nog niets gevonden.</div>'; return; }
     box.innerHTML = events.map((e, i) => `
       <div class="ev ${e.on ? '' : 'off'}" data-i="${i}">
@@ -481,32 +486,21 @@
     return lines.map(fold).join('\r\n') + '\r\n';
   }
 
-  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const selected = () => events.filter(e => e.on);
   const done = (n, how) => setStatus(`${n} ${n === 1 ? 'afspraak' : 'afspraken'} ${how}`);
 
-  // Hoofdknop: op iPhone direct het Agenda-scherm "Voeg alles toe" openen
-  $('ics').addEventListener('click', () => {
-    const list = selected(); if (!list.length) return;
-    const ics = buildIcs(list);
-    if (isIOS) {
-      location.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
-      done(list.length, 'klaargezet. Tik in het scherm dat opent op "Voeg alles toe".');
-    } else {
-      downloadFile(ics);
-      done(list.length, 'opgeslagen in afspraken.ics. Open het bestand om ze aan je agenda toe te voegen.');
-    }
-  });
-
-  // Tweede knop: bestand delen of bewaren
-  $('share').addEventListener('click', async () => {
+  // Eén knop: deelmenu (iPhone/Android), anders downloaden. Daarna uitleg tonen.
+  $('ics').addEventListener('click', async () => {
     const list = selected(); if (!list.length) return;
     const ics = buildIcs(list);
     const file = new File([ics], 'afspraken.ics', { type: 'text/calendar' });
+    $('help').hidden = false;
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file] }); return; } catch (err) { if (err.name === 'AbortError') return; }
+      try { await navigator.share({ files: [file] }); done(list.length, 'gedeeld. Volg de stappen hieronder.'); return; }
+      catch (err) { if (err.name === 'AbortError') return; }
     }
     downloadFile(ics);
+    done(list.length, 'opgeslagen in afspraken.ics. Volg de stappen hieronder.');
   });
 
   function downloadFile(ics) {
