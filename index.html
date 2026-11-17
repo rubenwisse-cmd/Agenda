@@ -140,7 +140,7 @@
         <ul>
           <li><b>Titel</b> → sleutel <code>titel</code></li>
           <li><b>Begindatum</b> (tik op de datum) → sleutel <code>start</code></li>
-          <li><b>Einddatum</b> → sleutel <code>eind</code></li>
+          <li><b>Einddatum</b> → sleutel <code>eind</code> (of <code>einde</code>)</li>
           <li>Tik op <b>Toon meer</b>, dan <b>Locatie</b> → sleutel <code>locatie</code></li>
         </ul>
         Kies bij <b>Agenda</b> in welke agenda ze moeten komen.</li>
@@ -522,12 +522,14 @@
     const list = selected(); if (!list.length) return;
     const data = list.map(e => {
       const allDay = e.allDay || !e.start;
-      return {
+      const d = {
         titel: e.title || 'Afspraak',
         locatie: e.location || '',
         start: e.date + ' ' + (allDay ? '00:00' : e.start),
         eind: allDay ? e.date + ' 23:59' : endDate(e) + ' ' + (e.end || addHour(e.start))
       };
+      d.einde = d.eind; // de opdracht mag 'eind' of 'einde' gebruiken
+      return d;
     });
     location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(SHORTCUT) +
       '&input=text&text=' + encodeURIComponent(JSON.stringify(data));
